@@ -1,0 +1,19 @@
+{
+  "personal": {
+    "name": "Carlos Benitez",
+    "location": "Encarnación",
+    "email": "carlos.benitez9712@gmail.com",
+    "phone": "+1 (555) 123-4567",
+    "linkedin": "www.linkedin.com/in/carlosbenitez-1349b1386"
+  },
+  "company": [
+    "Amazon",
+    "NextGen Healthcare",
+    "Keppel Ltd."
+  ],
+  "education": {
+    "university": "University of Central Florida",
+    "edu_location": "Stanford, CA",
+    "graduation_year": "Aug 2013 – May 2016"
+  }
+}

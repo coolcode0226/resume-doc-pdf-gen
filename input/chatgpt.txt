@@ -1,0 +1,70 @@
+Carlos Benitez | Encarnación, 7001, Paraguay | carlos.benitez9712@gmail.com
+ | www.linkedin.com/in/carlosbenitez-1349b1386
+
+Senior Full Stack Engineer (Backend-Leaning, Distributed Systems & Real-Time Platforms)
+
+PROFESSIONAL SUMMARY
+
+Senior Full Stack Engineer with 8+ years of experience building backend-heavy, scalable platforms across cloud, healthcare, and industrial domains. Strong expertise in Node.js- and Python-based microservices, distributed systems, and event-driven architectures supporting transactional and stateful workflows. Proven background designing secure APIs, real-time data flows, and resilient services used by large internal and external user bases. Experienced collaborating closely with frontend teams to deliver interactive React-based applications backed by reliable backend systems. Hands-on contributor with strong ownership, system design skills, and a track record of mentoring engineers and driving engineering best practices.
+
+SKILLS
+
+Backend & Distributed Systems: Node.js, Python, REST APIs, Microservices Architecture, Event-Driven Systems, Pub/Sub Messaging, WebSockets, Distributed System Design
+
+Frontend & Web Applications: React, TypeScript, Interactive Web Interfaces, API Integration, Real-Time UI Updates
+
+Data & Storage: PostgreSQL, Snowflake, Redis, Transactional Data Modeling, Data Consistency Patterns
+
+Cloud & DevOps: AWS, Docker, CI/CD Pipelines, Infrastructure Monitoring, Deployment Automation
+
+Observability & Engineering Practices: Logging & Monitoring, System Reliability, Automated Testing, Code Reviews, Technical Mentorship
+
+PROFESSIONAL EXPERIENCE
+Amazon | December 2023 – Present | Senior Software Engineer | United States (Remote)
+
+Designed and implemented backend services supporting high-throughput, low-latency workflows within a large-scale cloud platform, focusing on Node.js and Python APIs that handle stateful and transactional operations.
+
+Led architectural decisions for distributed services, applying event-driven patterns and asynchronous processing to decouple core workflows and improve system resilience.
+
+Built and maintained APIs consumed by internal web applications, collaborating with frontend engineers to ensure smooth integration with React-based user interfaces.
+
+Implemented real-time and near-real-time data delivery mechanisms to surface operational updates and system events to client applications.
+
+Owned service reliability by introducing structured logging, monitoring, and alerting, enabling proactive detection of performance and stability issues.
+
+Worked closely with product and DevOps teams to deliver end-to-end features, from design through deployment, in a fast-moving environment.
+
+Mentored engineers through design discussions and code reviews, reinforcing best practices around scalability, security, and maintainability.
+
+NextGen Healthcare | July 2020 – October 2023 | Software Engineer II | United States
+
+Developed backend services and data pipelines supporting healthcare workflows, building Python- and Node.js-based APIs that processed sensitive, transaction-oriented data reliably.
+
+Designed and optimized microservices handling user accounts, system events, and data synchronization across multiple components of the platform.
+
+Implemented asynchronous processing and messaging patterns to manage background tasks and reduce coupling between services.
+
+Collaborated with frontend teams to support React-based clinical and operational interfaces, ensuring backend APIs met performance and usability needs.
+
+Contributed to database modeling and query optimization efforts using PostgreSQL and Snowflake to support analytics and reporting use cases.
+
+Strengthened testing and CI/CD practices to validate critical logic and ensure stable releases in a regulated environment.
+
+Keppel Ltd. | November 2016 – July 2020 | Software Engineer | Singapore
+
+Built backend systems for industrial and IoT-related platforms, developing Python services that collected, processed, and exposed data through RESTful APIs.
+
+Worked on event-driven data ingestion pipelines to handle continuous streams of operational data from distributed sources.
+
+Designed data models and persistence layers to support monitoring dashboards and analytics features used by engineering and operations teams.
+
+Collaborated with frontend developers to deliver web-based interfaces for visualizing real-time and historical system data.
+
+Supported deployment and production operations, gaining hands-on experience with cloud infrastructure, monitoring, and system reliability.
+
+Contributed to iterative improvements in code quality and maintainability through refactoring and peer reviews.
+
+EDUCATION
+
+University of Central Florida
+Bachelor of Science in Computer Science | August 2013 – May 2016
