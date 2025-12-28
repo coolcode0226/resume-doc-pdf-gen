@@ -6,7 +6,6 @@ import tkinter as tk
 from tkinter import ttk, scrolledtext, filedialog, messagebox
 import json
 import os
-from pathlib import Path
 import sys
 from pdf_converter import convert_docx_to_pdf
 import re
@@ -20,13 +19,7 @@ class ResumeBuilderGUI:
         # Configure style
         self.setup_styles()
         
-        # Data storage
-        self.base_data = {
-            'personal': {},
-            'education': {},
-            'company': []
-        }
-        self.chatgpt_text = ""
+        self.education_entries = []
         
         # Create UI
         self.create_widgets()
@@ -37,8 +30,7 @@ class ResumeBuilderGUI:
         style.theme_use('clam')
         
         # Configure colors
-        bg_color = '#f0f0f0'
-        self.root.configure(bg=bg_color)
+        self.root.configure(bg='#f0f0f0')
         
         style.configure('Title.TLabel', 
                        font=('Segoe UI', 14, 'bold'),
@@ -58,93 +50,310 @@ class ResumeBuilderGUI:
         self.create_chatgpt_tab(notebook)
         
         # Create bottom buttons
-        self.create_action_buttons()
+        self.create_generate_buttons()
         
     def create_base_info_tab(self, notebook):
         """Create Base Information tab"""
         frame = ttk.Frame(notebook)
         notebook.add(frame, text='📋 Base Information')
         
-        # Create main container with scrollbar
-        canvas = tk.Canvas(frame, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=canvas.yview)
+        # Config buttons frame (fixed at bottom, centered)
+        config_frame = ttk.Frame(frame)
+        config_frame.pack(side='bottom', fill='x', padx=20, pady=10)
+        
+        # Center the buttons
+        button_container = ttk.Frame(config_frame)
+        button_container.pack(anchor='center')
+        
+        ttk.Button(button_container, text="⚙️ Load Base Information",
+                  command=self.load_base_information,
+                  width=15).pack(side='left', padx=2)
+        
+        ttk.Button(button_container, text="💾 Save Base Information",
+                  command=self.save_base_information,
+                  width=15).pack(side='left', padx=2)
+        
+        # Create scrollable container
+        scroll_container = ttk.Frame(frame)
+        scroll_container.pack(fill='both', expand=True)
+
+        # Create canvas and scrollbar
+        canvas = tk.Canvas(scroll_container, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(scroll_container, orient="vertical", command=canvas.yview)
         scrollable_frame = ttk.Frame(canvas)
-        
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-        
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+
+        # Configure canvas window
+        canvas_window = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
-        
+
         # Pack canvas and scrollbar
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
+
+        # Update scroll region and canvas width
+        def on_frame_configure(event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def on_canvas_configure(event):
+            canvas.itemconfig(canvas_window, width=event.width)
+
+        scrollable_frame.bind("<Configure>", on_frame_configure)
+        canvas.bind("<Configure>", on_canvas_configure)
+
+        # Mouse wheel scrolling
+        canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"))
+        
+        # Store reference to scrollable frame
+        self.scrollable_frame = scrollable_frame
         
         # Title
         title = ttk.Label(scrollable_frame, text="Base Information", style='Title.TLabel')
-        title.grid(row=0, column=0, columnspan=2, sticky='w', pady=(0, 10))
+        title.grid(row=0, column=0, columnspan=2, sticky='w', padx=20, pady=(20, 10))
         
         # Create form
         self.fields = {}
-        
-        # Field definitions
-        field_definitions = [
-            # (field_key, label_text, placeholder, row, category)
-            ('name', 'Full Name:', 'John Doe', 1, 'personal'),
-            ('location', 'Location:', 'San Francisco, CA', 2, 'personal'),
-            ('email', 'Email:', 'john.doe@email.com', 3, 'personal'),
-            ('phone', 'Phone:', '+1 (555) 123-4567', 4, 'personal'),
-            ('linkedin', 'LinkedIn URL:', 'https://linkedin.com/in/johndoe', 5, 'personal'),
-            
-            ('university', 'University:', 'Stanford University', 7, 'education'),
-            ('edu_location', 'University Location:', 'Stanford, CA', 8, 'education'),
-            ('graduation_year', 'Graduation Date:', '2020', 9, 'education'),
-            
-            ('company', 'Companies (comma separated):', 'Microsoft, PayPal, Tagani', 11, 'company')
-        ]
-        
         current_row = 1
         
-        for field_key, label_text, placeholder, row_num, category in field_definitions:
-            # Add separator before sections
-            if field_key == 'university':
-                ttk.Separator(scrollable_frame, orient='horizontal').grid(
-                    row=6, column=0, columnspan=2, sticky='ew', pady=10
-                )
-                ttk.Label(scrollable_frame, text="Education", 
-                         font=('Segoe UI', 11, 'bold')).grid(
-                    row=6, column=0, columnspan=2, sticky='w', pady=(10, 5)
-                )
-            
-            if field_key == 'company':
-                ttk.Separator(scrollable_frame, orient='horizontal').grid(
-                    row=10, column=0, columnspan=2, sticky='ew', pady=10
-                )
-                ttk.Label(scrollable_frame, text="Work Experience", 
-                         font=('Segoe UI', 11, 'bold')).grid(
-                    row=10, column=0, columnspan=2, sticky='w', pady=(10, 5)
-                )
-            
-            # Label
+        # Personal Information Section
+        ttk.Label(scrollable_frame, text="Personal Information", 
+                 font=('Segoe UI', 11, 'bold')).grid(
+            row=current_row, column=0, columnspan=3, sticky='w', padx=20, pady=(0, 10)
+        )
+        current_row += 1
+        
+        # Field definitions for personal info
+        personal_fields = [
+            ('name', 'Full Name:', 'John Doe', 'personal'),
+            ('location', 'Location:', 'San Francisco, CA', 'personal'),
+            ('email', 'Email:', 'john.doe@email.com', 'personal'),
+            ('phone', 'Phone:', '+1 (555) 123-4567', 'personal'),
+            ('linkedin', 'LinkedIn URL:', 'https://linkedin.com/in/johndoe', 'personal')
+        ]
+        
+        for field_key, label_text, placeholder, category in personal_fields:
             label = ttk.Label(scrollable_frame, text=label_text, style='Field.TLabel')
-            label.grid(row=row_num, column=0, sticky='w', pady=5)
+            label.grid(row=current_row, column=0, sticky='w', padx=20, pady=5)
             
-            # Entry field
             entry = ttk.Entry(scrollable_frame, width=40)
             entry.insert(0, placeholder)
-            entry.grid(row=row_num, column=1, sticky='ew', pady=5, padx=(10, 0))
+            entry.grid(row=current_row, column=1, sticky='ew', pady=5, padx=(10, 20))
             
             self.fields[field_key] = {
                 'entry': entry,
                 'category': category
             }
-            current_row = row_num + 1
+            current_row += 1
+        
+        # Education Section
+        current_row += 1
+        ttk.Separator(scrollable_frame, orient='horizontal').grid(
+            row=current_row, column=0, columnspan=3, sticky='ew', padx=20, pady=10
+        )
+        current_row += 1
+        
+        edu_header_frame = ttk.Frame(scrollable_frame)
+        edu_header_frame.grid(row=current_row, column=0, columnspan=3, sticky='ew', padx=20, pady=(0, 10))
+        ttk.Label(edu_header_frame, text="Education", 
+                 font=('Segoe UI', 11, 'bold')).pack(side='left')
+        ttk.Button(edu_header_frame, text="+ Add Education", 
+                  command=self.add_education_entry,
+                  width=15).pack(side='right')
+        self.edu_start_row = current_row + 1
+        
+        # Add initial education entries (2 entries)
+        for i in range(2):
+            self.add_education_entry()
+        
+        # Calculate row after education entries (each entry takes 5 rows now with degree)
+        work_exp_start_row = self.edu_start_row + len(self.education_entries) * 5
+        
+        # Work Experience Section
+        ttk.Separator(scrollable_frame, orient='horizontal').grid(
+            row=work_exp_start_row, column=0, columnspan=3, sticky='ew', padx=20, pady=10
+        )
+        work_exp_start_row += 1
+        
+        ttk.Label(scrollable_frame, text="Work Experience", 
+                 font=('Segoe UI', 11, 'bold')).grid(
+            row=work_exp_start_row, column=0, columnspan=3, sticky='w', padx=20, pady=(10, 5)
+        )
+        work_exp_start_row += 1
+        
+        # Company field
+        label = ttk.Label(scrollable_frame, text='Companies (comma separated):', style='Field.TLabel')
+        label.grid(row=work_exp_start_row, column=0, sticky='w', padx=20, pady=5)
+        
+        entry = ttk.Entry(scrollable_frame, width=40)
+        entry.insert(0, 'Microsoft, PayPal, Tagani')
+        entry.grid(row=work_exp_start_row, column=1, sticky='ew', pady=5, padx=(10, 20))
+        
+        self.fields['company'] = {
+            'entry': entry,
+            'category': 'company'
+        }
         
         # Configure grid weights
         scrollable_frame.columnconfigure(1, weight=1)
         
+        # Update canvas scroll region when window is resized
+        def on_frame_configure(event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        
+        scrollable_frame.bind('<Configure>', on_frame_configure)
+        
+    def add_education_entry(self, data=None):
+        """Add a new education entry to the form"""
+        # Limit to 3 education entries
+        if len(self.education_entries) >= 3:
+            messagebox.showwarning("Warning", "Maximum 3 education entries allowed")
+            return
+        
+        # Calculate row position (each entry takes 5 rows now with degree)
+        row_pos = self.edu_start_row + len(self.education_entries) * 5
+        
+        # Create entry frame
+        entry_frame = ttk.Frame(self.scrollable_frame)
+        entry_frame.grid(row=row_pos, column=0, columnspan=3, sticky='ew', pady=5)
+        
+        # University field
+        ttk.Label(entry_frame, text='University:', style='Field.TLabel').grid(row=0, column=0, sticky='w', padx=(20, 5))
+        university_entry = ttk.Entry(entry_frame, width=35)
+        if data and 'university' in data:
+            university_entry.insert(0, data['university'])
+        else:
+            university_entry.insert(0, 'Stanford University')
+        university_entry.grid(row=0, column=1, sticky='ew', padx=5)
+        
+        # Degree field
+        ttk.Label(entry_frame, text='Degree:', style='Field.TLabel').grid(row=1, column=0, sticky='w', padx=(20, 5))
+        degree_entry = ttk.Entry(entry_frame, width=35)
+        if data and 'degree' in data:
+            degree_entry.insert(0, data['degree'])
+        else:
+            degree_entry.insert(0, 'Bachelor of Science')
+        degree_entry.grid(row=1, column=1, sticky='ew', padx=5)
+        
+        # Location field
+        ttk.Label(entry_frame, text='Location:', style='Field.TLabel').grid(row=2, column=0, sticky='w', padx=(20, 5))
+        location_entry = ttk.Entry(entry_frame, width=35)
+        if data and 'edu_location' in data:
+            location_entry.insert(0, data['edu_location'])
+        else:
+            location_entry.insert(0, 'Stanford, CA')
+        location_entry.grid(row=2, column=1, sticky='ew', padx=5)
+        
+        # Graduation date field
+        ttk.Label(entry_frame, text='Graduation Date:', style='Field.TLabel').grid(row=3, column=0, sticky='w', padx=(20, 5))
+        graduation_entry = ttk.Entry(entry_frame, width=35)
+        if data and 'graduation_year' in data:
+            graduation_entry.insert(0, data['graduation_year'])
+        else:
+            graduation_entry.insert(0, '2020')
+        graduation_entry.grid(row=3, column=1, sticky='ew', padx=5)
+        
+        # Remove button
+        entry_data = {
+            'frame': entry_frame,
+            'university': university_entry,
+            'degree': degree_entry,
+            'location': location_entry,
+            'graduation_year': graduation_entry,
+            'row': row_pos
+        }
+        
+        remove_btn = ttk.Button(entry_frame, text="Remove", 
+                               command=lambda ed=entry_data: self.remove_education_entry(ed),
+                               width=10)
+        remove_btn.grid(row=0, column=2, rowspan=4, padx=5)
+        
+        self.education_entries.append(entry_data)
+        entry_frame.columnconfigure(1, weight=1)
+    
+    def remove_education_entry(self, entry_data):
+        """Remove an education entry from the form"""
+        if entry_data in self.education_entries:
+            entry_data['frame'].destroy()
+            self.education_entries.remove(entry_data)
+            # Update row positions for remaining entries (each entry takes 5 rows now)
+            for i, edu in enumerate(self.education_entries):
+                new_row = self.edu_start_row + i * 5
+                edu['row'] = new_row
+                edu['frame'].grid(row=new_row, column=0, columnspan=3, sticky='ew', pady=5)
+
+    def load_base_information(self):
+        """Load Base Information from JSON file"""
+        file_path = filedialog.askopenfilename(
+            title="Load Base Information",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+        )
+        
+        if file_path:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                
+                # Load personal data into fields
+                for field_key, field_info in self.fields.items():
+                    entry = field_info['entry']
+                    category = field_info['category']
+                    
+                    if category == 'company':
+                        # Handle company field specially
+                        if 'company' in config and config['company']:
+                            if isinstance(config['company'], list):
+                                company_text = ', '.join(config['company'])
+                            else:
+                                company_text = str(config['company'])
+                            entry.delete(0, tk.END)
+                            entry.insert(0, company_text)
+                    elif category == 'personal':
+                        # Handle personal fields
+                        if 'personal' in config and field_key in config['personal']:
+                            entry.delete(0, tk.END)
+                            entry.insert(0, config['personal'][field_key])
+                
+                # Load education data (list)
+                if 'education' in config:
+                    education_data = config['education']
+                    # Convert old format (dict) to list if needed
+                    if isinstance(education_data, dict):
+                        education_data = [education_data]
+                    elif not isinstance(education_data, list):
+                        education_data = []
+                    
+                    # Clear existing education entries safely
+                    # Destroy all frames first, then clear the list
+                    for edu_entry in self.education_entries:
+                        edu_entry['frame'].destroy()
+                    self.education_entries.clear()
+                    
+                    # Add loaded education entries
+                    for edu_data in education_data:
+                        self.add_education_entry(data=edu_data)
+                
+                messagebox.showinfo("Success", f"Loaded Base Information")
+                
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to load Base Information: {e}")
+    
+    def save_base_information(self):
+        """Save Base Information to JSON file"""
+        config = self.collect_base_info()
+        
+        file_path = filedialog.asksaveasfilename(
+            title="Save Base Information",
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+        )
+        
+        if file_path:
+            try:
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(config, f, indent=2, ensure_ascii=False)
+                messagebox.showinfo("Success", f"Base Information saved")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to save Base Information: {e}")
+    
     def create_chatgpt_tab(self, notebook):
         frame = ttk.Frame(notebook)
         notebook.add(frame, text='🤖 ChatGPT Input')
@@ -197,45 +406,17 @@ class ResumeBuilderGUI:
         file_frame.pack(padx=20, pady=5)
         
         ttk.Button(file_frame, text="📂 Load from File",
-                  command=self.load_chatgpt_file,
+                  command=self.load_chatgpt_output,
                   width=15).pack(side='left', padx=2)
         
         ttk.Button(file_frame, text="💾 Save to File",
-                  command=self.save_chatgpt_file,
+                  command=self.save_chatgpt_output,
                   width=15).pack(side='left', padx=2)
-        
-    def create_action_buttons(self):
-        """Create action buttons at bottom"""
-        button_frame = ttk.Frame(self.root)
-        button_frame.pack(fill='x', padx=20, pady=10)
-        
-        # Left side buttons
-        left_frame = ttk.Frame(button_frame)
-        left_frame.pack(side='left')
-        
-        ttk.Button(left_frame, text="⚙️ Load Config",
-                  command=self.load_config).pack(side='left', padx=2)
-        
-        ttk.Button(left_frame, text="💾 Save Config",
-                  command=self.save_config).pack(side='left', padx=2)
-        
-        # Right side button (primary action)
-        ttk.Button(button_frame, text="🚀 Generate Resume",
-                  command=self.generate_resume,
-                  style='Accent.TButton').pack(side='right')
-        
-        # Configure accent button
-        style = ttk.Style()
-        style.configure('Accent.TButton',
-                       font=('Segoe UI', 10, 'bold'),
-                       foreground='white',
-                       background='#0078D4',
-                       padding=10)
-    
-    def load_chatgpt_file(self):
+
+    def load_chatgpt_output(self):
         """Load ChatGPT output from file"""
         file_path = filedialog.askopenfilename(
-            title="Load ChatGPT Output",
+            title="Load ChatGPT Output from File",
             filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
         )
         
@@ -250,7 +431,7 @@ class ResumeBuilderGUI:
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to load file: {e}")
     
-    def save_chatgpt_file(self):
+    def save_chatgpt_output(self):
         """Save ChatGPT output to file"""
         content = self.chatgpt_text_area.get('1.0', tk.END).strip()
         
@@ -259,7 +440,7 @@ class ResumeBuilderGUI:
             return
         
         file_path = filedialog.asksaveasfilename(
-            title="Save ChatGPT Output",
+            title="Save ChatGPT Output to File",
             defaultextension=".txt",
             filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
         )
@@ -271,67 +452,24 @@ class ResumeBuilderGUI:
                 messagebox.showinfo("Success", f"Saved to {os.path.basename(file_path)}")
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to save file: {e}")
-    
-    def load_config(self):
-        """Load configuration from JSON file"""
-        file_path = filedialog.askopenfilename(
-            title="Load Configuration",
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
-        )
         
-        if file_path:
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                
-                # Load data into fields
-                for field_key, field_info in self.fields.items():
-                    entry = field_info['entry']
-                    category = field_info['category']
-                    
-                    if category == 'company':
-                        # Handle company field specially
-                        if 'company' in config and config['company']:
-                            if isinstance(config['company'], list):
-                                company_text = ', '.join(config['company'])
-                            else:
-                                company_text = str(config['company'])
-                            entry.delete(0, tk.END)
-                            entry.insert(0, company_text)
-                    else:
-                        # Handle personal and education fields
-                        if category in config and field_key in config[category]:
-                            entry.delete(0, tk.END)
-                            entry.insert(0, config[category][field_key])
-                
-                # Load ChatGPT text
-                if 'chatgpt_text' in config:
-                    self.chatgpt_text_area.delete('1.0', tk.END)
-                    self.chatgpt_text_area.insert('1.0', config['chatgpt_text'])
-                
-                messagebox.showinfo("Success", f"Loaded configuration")
-                
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to load config: {e}")
-    
-    def save_config(self):
-        """Save configuration to JSON file"""
-        config = self.collect_data()
+    def create_generate_buttons(self):
+        """Create action buttons at bottom"""
+        button_frame = tk.Frame(self.root, bg='#f0f0f0')
+        button_frame.pack(fill='x', padx=20, pady=10, side='bottom')
         
-        file_path = filedialog.asksaveasfilename(
-            title="Save Configuration",
-            defaultextension=".json",
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
-        )
+        # Right side button (primary action)
+        ttk.Button(button_frame, text="🚀 Generate Resume",
+                  command=self.generate_resume,
+                  style='Accent.TButton').pack(side='right')
         
-        if file_path:
-            try:
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    json.dump(config, f, indent=2, ensure_ascii=False)
-                messagebox.showinfo("Success", f"Configuration saved")
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to save config: {e}")
-    
+        # Configure accent button
+        style = ttk.Style()
+        style.configure('Accent.TButton',
+                       font=('Segoe UI', 10, 'bold'),
+                       foreground='white',
+                       background='#0078D4',
+                       padding=10)
 
     def clean_folder_name(self, folder_name):
         """
@@ -339,7 +477,7 @@ class ResumeBuilderGUI:
         and applying naming conventions
         """
 
-            # --- Extract company name ---
+        # --- Extract company name ---
         company_name = folder_name.split('+', 1)[0].strip()
 
         if company_name:
@@ -351,16 +489,13 @@ class ResumeBuilderGUI:
             if os.path.exists(company_file_path):
                 with open(company_file_path, "r", encoding="utf-8") as f:
                     existing_companies = {line.strip() for line in f if line.strip()}
-
-            # Check duplication
+            
+            # Check if already bid
             if company_name in existing_companies:
-                messagebox.showerror("Error", "You've already bid this company. Please choose another one.!")
-                return ""
-            else:
-                with open(company_file_path, "a", encoding="utf-8") as f:
-                    f.write(company_name + "\n")
-
-
+                messagebox.showerror("Error", "You've already bid this company. Please choose another one!")
+                return None, None
+        
+        # Clean folder name
         # Remove invalid Windows filename characters
         invalid_chars = r'[<>:"/\\|?*]'
         cleaned = re.sub(invalid_chars, '', folder_name)
@@ -380,20 +515,31 @@ class ResumeBuilderGUI:
         if not cleaned:
             cleaned = "my_resume"
         
-        return cleaned
+        return cleaned, company_name
+    
+    def write_company_to_file(self, company_name):
+        """Write company name to company.txt file"""
+        if not company_name:
+            return
+        
+        os.makedirs("input", exist_ok=True)
+        company_file_path = os.path.join("input", "company.txt")
+        
+        try:
+            with open(company_file_path, "a", encoding="utf-8") as f:
+                f.write(company_name + "\n")
+        except Exception as e:
+            print(f"Warning: Failed to write company to file: {e}")
 
-    def collect_data(self):
-        """Collect all data from the UI"""
-        # Initialize data structure
+    def collect_base_info(self):
+        """Collect only base information (for save/load config)"""
         config = {
             'personal': {},
-            'education': {},
-            'company': [],
-            'chatgpt_text': '',
-            'folder_name': self.clean_folder_name(self.folder_name_var.get().strip())
+            'education': [],
+            'company': []
         }
         
-        # Collect data from fields
+        # Collect personal data from fields
         for field_key, field_info in self.fields.items():
             entry = field_info['entry']
             category = field_info['category']
@@ -404,15 +550,28 @@ class ResumeBuilderGUI:
                 if value:
                     companies = [c.strip() for c in value.split(',') if c.strip()]
                     config['company'] = companies
-            else:
-                # Store in appropriate category
+            elif category == 'personal':
+                # Store in personal category
                 if value:
-                    config[category][field_key] = value
+                    config['personal'][field_key] = value
         
-        # Collect ChatGPT text
-        config['chatgpt_text'] = self.chatgpt_text_area.get('1.0', tk.END).strip()
+        # Collect education data from entries
+        for edu_entry in self.education_entries:
+            edu_data = {
+                'university': edu_entry['university'].get().strip(),
+                'degree': edu_entry['degree'].get().strip(),
+                'edu_location': edu_entry['location'].get().strip(),
+                'graduation_year': edu_entry['graduation_year'].get().strip()
+            }
+            # Only add if at least university is filled
+            if edu_data['university']:
+                config['education'].append(edu_data)
         
         return config
+    
+    def collect_chatgpt_output(self):
+        """Collect ChatGPT output text from the UI"""
+        return self.chatgpt_text_area.get('1.0', tk.END).strip()
     
     def get_sample_chatgpt_output(self):
         """Return sample ChatGPT output"""
@@ -443,56 +602,36 @@ Software Engineer | Makati, Philippines | October 2016 - September 2021
     def generate_resume(self):
         """Generate the resume using collected data"""
         try:
-            # Collect data
-            config = self.collect_data()
+            # Collect base info and chatgpt output separately
+            config = self.collect_base_info()
+            chatgpt_text = self.collect_chatgpt_output()
             
             # Validate required fields
             if not config['personal'].get('name'):
                 messagebox.showerror("Error", "Please enter your Full Name")
                 return
             
-            if not config['chatgpt_text']:
+            if not chatgpt_text:
                 messagebox.showerror("Error", "Please enter ChatGPT resume output")
                 return
             
-            # Save files
-            self.save_input_files(config)
-            
-            # Validate folder name
-            folder_name = config['folder_name']
-            if not folder_name or folder_name.strip() == "":
-                messagebox.showerror("Error", "Please enter a folder name")
+            # Clean folder name and check if company is already bid
+            folder_name, company_name = self.clean_folder_name(self.folder_name_var.get().strip())
+            if not folder_name:
+                # Already bid or invalid - error already shown in clean_folder_name
                 return
 
+            # Add folder_name and company_name to config
+            config['folder_name'] = folder_name
+            config['company_name'] = company_name
+
             # Import and run processor
-            self.run_resume_processor(config)
+            self.run_resume_processor(config, chatgpt_text)
             
         except Exception as e:
             messagebox.showerror("Error", f"Failed to generate resume: {e}")
     
-    def save_input_files(self, config):
-        """Save input files for processing"""
-        # Create input directory
-        os.makedirs('input', exist_ok=True)
-        
-        # Prepare base_data
-        base_data = {
-            'personal': config['personal'],
-            'company': config['company'],
-            'education': config['education']
-        }
-        
-        # Save base_data.json
-        with open('input/base_data.json', 'w', encoding='utf-8') as f:
-            json.dump(base_data, f, indent=2, ensure_ascii=False)
-        
-        # Save chatgpt.txt
-        with open('input/chatgpt.txt', 'w', encoding='utf-8') as f:
-            f.write(config['chatgpt_text'])
-        
-        print("✅ Saved input files")
-    
-    def run_resume_processor(self, config):
+    def run_resume_processor(self, config, chatgpt_text):
         """Run the resume processor"""
         try:
             # Check template folder
@@ -503,38 +642,45 @@ Software Engineer | Makati, Philippines | October 2016 - September 2021
                     "Please extract your DOCX to: input/template1/")
                 return
             
+            # Check template document
+            template_doc = "input/document.xml"
+            if not os.path.exists(template_doc):
+                messagebox.showerror("Error", 
+                    "Template document not found.\n"
+                    "Please ensure input/document.xml exists")
+                return
+            
             # Import processor
-            try:
-                from processor import ResumeProcessor
-            except ImportError:
-                sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-                from processor import ResumeProcessor
+            from processor import ResumeProcessor
             
             # Create and run processor
             processor = ResumeProcessor(
-                template_doc="input/document.xml",
+                template_doc=template_doc,
                 template_folder=template_folder,
-                chatgpt_file="input/chatgpt.txt",
+                chatgpt_text=chatgpt_text,
                 config=config
             )
 
-            print(config)
-            
             # Run processor
             result = processor.run()
             
             if result:
                 pdf_result = convert_docx_to_pdf(result)
                 os.startfile(pdf_result)
-                self.on_generation_success(result)
+                company_name = config.get('company_name')
+                self.on_generation_success(result, company_name)
             else:
                 messagebox.showerror("Error", "Failed to generate resume")
                 
         except Exception as e:
             messagebox.showerror("Error", f"Processor error: {e}")
     
-    def on_generation_success(self, output_file):
+    def on_generation_success(self, output_file, company_name=None):
         """Handle successful generation"""
+        # Write company name to file after successful generation
+        if company_name:
+            self.write_company_to_file(company_name)
+        
         pdf_file = output_file.replace('.docx', '.pdf')
         pdf_exists = os.path.exists(pdf_file)
         
@@ -551,11 +697,3 @@ Software Engineer | Makati, Philippines | October 2016 - September 2021
     def run(self):
         """Run the GUI application"""
         self.root.mainloop()
-
-def main():
-    """Main entry point"""
-    app = ResumeBuilderGUI()
-    app.run()
-
-if __name__ == "__main__":
-    main()

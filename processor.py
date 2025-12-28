@@ -6,7 +6,6 @@ import os
 import shutil
 import re
 import tempfile
-from datetime import datetime
 from parser import parse_chatgpt_output
 
 
@@ -28,11 +27,11 @@ class ResumeProcessor:
         r"C:\Program Files (x86)\WinRAR\WinRAR.exe",
     ]
 
-    def __init__(self, template_doc, template_folder, chatgpt_file, config=None):
+    def __init__(self, template_doc, template_folder, chatgpt_text, config=None):
         """Initialize the resume processor."""
         self.template_doc = template_doc
         self.template_folder = template_folder
-        self.chatgpt_file = chatgpt_file
+        self.chatgpt_text = chatgpt_text
         self.xml_content = ''
         self.parsed_data = {}
         self.config = config
@@ -58,15 +57,11 @@ class ResumeProcessor:
         with open(self.template_doc, 'r', encoding='utf-8') as f:
             self.xml_content = f.read()
         
-        # Load and parse ChatGPT output
-        with open(self.chatgpt_file, 'r', encoding='utf-8') as f:
-            chatgpt_text = f.read()
-        
         # Prepare base data structure
         self.base_data = {
             'personal': {},
             'company': ["Microsoft", "PayPal", "Tagani"],
-            'education': {},
+            'education': [],  # Changed to list
         }
 
         print(self.config)
@@ -75,12 +70,19 @@ class ResumeProcessor:
         self.base_data['company'] = self.config.get('company', ["Microsoft", "PayPal", "Tagani"])
         personal_info = {}
 
-        self.base_data['personal'] = self.config.get('personal', [])
+        self.base_data['personal'] = self.config.get('personal', {})
 
-        self.base_data['education'] = self.config.get('education', [])
+        # Handle education as list (backward compatible with dict)
+        education_data = self.config.get('education', [])
+        if isinstance(education_data, dict):
+            # Convert old format to list
+            education_data = [education_data]
+        elif not isinstance(education_data, list):
+            education_data = []
+        self.base_data['education'] = education_data
 
         # Parse data
-        self.parsed_data = parse_chatgpt_output(chatgpt_text, self.base_data)
+        self.parsed_data = parse_chatgpt_output(self.chatgpt_text, self.base_data)
         
         print(self.parsed_data)
         print("✓ Files loaded and parsed successfully")
@@ -103,20 +105,26 @@ class ResumeProcessor:
         """Process XML content by replacing tags."""
         self._replace_simple_tags()
         self._process_company_block()
+        self._process_education_block()
         self._process_skill_block()
         self._check_remaining_tags()
 
     def _replace_simple_tags(self):
         """Replace simple one-to-one tags."""
+        # Get first education entry (for backward compatibility)
+        first_education = {}
+        if self.base_data['education'] and len(self.base_data['education']) > 0:
+            first_education = self.base_data['education'][0]
+        
         replacements = {
             '<resume_person_name>': self.base_data['personal'].get('name', ''),
             '<resume_person_location>': self.base_data['personal'].get('location', ''),
             '<resume_person_email>': self.base_data['personal'].get('email', ''),
             '<resume_person_linkedin>': self.base_data['personal'].get('linkedin', ''),
             '<resume_summary>': self.parsed_data.get('summary', ''),
-            '<resume_education_name>': self.base_data['education'].get('university', ''),
-            '<resume_education_location>': self.base_data['education'].get('edu_location', ''),
-            '<resume_education_date>': self.base_data['education'].get('graduation_year', '')
+            '<resume_education_name>': first_education.get('university', ''),
+            '<resume_education_location>': first_education.get('edu_location', ''),
+            '<resume_education_date>': first_education.get('graduation_year', '')
         }
         
         for tag, value in replacements.items():
@@ -125,6 +133,10 @@ class ResumeProcessor:
                 print(f"✓ Replaced {tag}")
             else:
                 print(f"⚠ Tag not found: {tag}")
+        
+        # Process multiple education entries if there are more than one
+        if len(self.base_data['education']) > 1:
+            self._process_education_block()
 
     def _process_company_block(self):
         """Find and replace the company block template."""
@@ -225,6 +237,71 @@ class ResumeProcessor:
         para_end += 6  # Include "</w:p>"
         return xml_text[para_start:para_end]
 
+    def _process_education_block(self):
+        """Find and replace the education block template for multiple entries."""
+        # Only process if we have more than one education entry
+        if len(self.base_data['education']) <= 1:
+            return
+        
+        block_info = self._find_education_block()
+        if not block_info:
+            print("⚠ Could not find education block template, using first entry only")
+            return
+        
+        start_idx, end_idx, block_template = block_info
+        
+        # Generate education blocks (skip first as it's already replaced)
+        education_blocks = [
+            self._create_education_xml(block_template, edu)
+            for edu in self.base_data['education'][1:]  # Skip first entry
+        ]
+        
+        # Replace in XML (insert after first education entry)
+        self.xml_content = (
+            self.xml_content[:end_idx] +
+            '\n'.join(education_blocks) +
+            self.xml_content[end_idx:]
+        )
+        
+        print(f"✓ Added {len(education_blocks)} additional education entries")
+    
+    def _find_education_block(self):
+        """Find the education block template in XML."""
+        name_tag = '<resume_education_name>'
+        name_pos = self.xml_content.find(name_tag)
+        
+        if name_pos == -1:
+            return None
+        
+        # Find paragraph start
+        para_start = self.xml_content.rfind('<w:p w14', 0, name_pos)
+        if para_start == -1:
+            return None
+        
+        # Find paragraph end
+        para_end = self.xml_content.find('</w:p>', name_pos)
+        if para_end == -1:
+            return None
+        
+        para_end += 6  # Include "</w:p>"
+        
+        return (para_start, para_end, self.xml_content[para_start:para_end])
+    
+    def _create_education_xml(self, template, education):
+        """Create XML for a single education entry from template."""
+        replacements = {
+            '<resume_education_name>': education.get('university', ''),
+            '<resume_education_location>': education.get('edu_location', ''),
+            '<resume_education_date>': education.get('graduation_year', '')
+        }
+        
+        education_xml = template
+        for tag, value in replacements.items():
+            if tag in education_xml:
+                education_xml = education_xml.replace(tag, self._escape_xml(value))
+        
+        return education_xml
+    
     def _process_skill_block(self):
         """Find and replace the skill block template."""
         block_info = self._find_skill_block()
